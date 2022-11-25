@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 adb wait-for-device
 adb -e push ramdisk.img /data/local/tmp/ramdisk.img.gz
