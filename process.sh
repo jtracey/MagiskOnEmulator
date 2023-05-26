@@ -34,7 +34,7 @@ cleanup() {
   rm -f process.sh
   rm -f magisk.zip
   rm -f initrd.patch
-  
+
   sync; sync
 }
 
@@ -99,9 +99,9 @@ if [[ -n $USES_CANARY ]]; then
       dd if=magisk.zip of=magisk.zip.new bs=4096 count=$BLOCK > /dev/null 2>&1
       mv -f magisk.zip.new magisk.zip
     fi
-  done  
+  done
 fi
-  
+
 # extract files
 echo "[*] Unzipping Magisk .."
 $BUSYBOX unzip magisk.zip -od $TMP_DIR > /dev/null
@@ -128,7 +128,7 @@ fi
 # If you don't wanna take it, comment out those lines
 if [[ $IS64BIT == true ]]; then
   rm -f ${TMP_DIR}${BINDIR}/$ARCH/busybox
-  if [[ $ARCH == "x86" ]]; then
+  if [[ $ARCH == "x86" ]] || [[ $ARCH == "x86_64" ]]; then
     $BUSYBOX wget -c https://raw.githubusercontent.com/Magisk-Modules-Repo/busybox-ndk/master/busybox-x86_64-selinux -O ${TMP_DIR}${BINDIR}/$ARCH/busybox
   else
     $BUSYBOX wget -c https://raw.githubusercontent.com/Magisk-Modules-Repo/busybox-ndk/master/busybox-arm64-selinux -O ${TMP_DIR}${BINDIR}/$ARCH/busybox
@@ -159,13 +159,13 @@ fi
 if [[ $API -ge 30 ]]; then
   echo "[-] API level greater then 30"
   echo "[*] Check if we need to repack ramdisk before patching .."
-  COUNT=`$BUSYBOX strings -t d $RAMDISK | $BUSYBOX grep TRAILER\!\!\! | $BUSYBOX wc -l`  
+  COUNT=`$BUSYBOX strings -t d $RAMDISK | $BUSYBOX grep TRAILER\!\!\! | $BUSYBOX wc -l`
   if [ $COUNT -gt 1 ]; then
     echo "[-] Multiple cpio archives detected"
     REPACK_RAMDISK=1
   fi
 fi
-  
+
 if [[ -n $REPACK_RAMDISK ]]; then
   echo "[*] Unpacking ramdisk .."
   mkdir -p $TMP_DIR/ramdisk
@@ -185,7 +185,7 @@ if [[ -n $REPACK_RAMDISK ]]; then
       # find first occurance of string in image, that will be start of cpio archive
       dd if=$RAMDISK skip=$START count=$OBS ibs=$IBS obs=$OBS of=$TMP_DIR/temp.img > /dev/null 2>&1
       HEAD=(`$BUSYBOX strings -t d $TMP_DIR/temp.img | $BUSYBOX head -1`)
-      
+
       # wola
       [[ -n $TRY_LZ4 ]] && MAGIC=9 || MAGIC=$((HEAD[0]))
       LAST_INDEX=$((START+MAGIC))
@@ -194,7 +194,7 @@ if [[ -n $REPACK_RAMDISK ]]; then
 
     # number of blocks we'll extract
     BLOCKS=$(((OFFSET+128)/IBS))
-    
+
     # extract and dump
     echo "[-] Dumping from $LAST_INDEX to $BLOCKS .."
     dd if=$RAMDISK skip=$LAST_INDEX count=$BLOCKS ibs=$IBS obs=$OBS of=$TMP_DIR/temp.img > /dev/null 2>&1
@@ -238,7 +238,7 @@ if [[ -n $USES_MANAGER ]]; then
     printf "\x00\x00\x00\x00\x00\x00\x00\x00" >> $BOOT_IMG
     i=$(($i+1))
   done
-  
+
   # append ramdisk right after header
   cat $RAMDISK >> $BOOT_IMG
 
