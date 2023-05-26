@@ -19,7 +19,6 @@ TMP_DIR=$BASE_DIR/tmp
 MAGISK_DIR=$BASE_DIR/magisk
 RAMDISK=$BASE_DIR/ramdisk.img
 INITRD=$BASE_DIR/initrd.img
-BUSYBOX=$BASE_DIR/busybox
 
 mkdir -p $TMP_DIR
 mkdir -p $MAGISK_DIR
@@ -30,7 +29,6 @@ cleanup() {
   rm -f config
   rm -rf $TMP_DIR
   rm -rf $MAGISK_DIR
-  rm -f busybox
   rm -f process.sh
   rm -f magisk.zip
   rm -f initrd.patch
@@ -50,15 +48,13 @@ if [ ! -f $BASE_DIR/magisk.zip ]; then
   exit
 fi
 
-# prepare busybox
 cd $BASE_DIR
-chmod 755 $BUSYBOX
 
 # platform check
 echo "[*] Checking Android version"
 API=`getprop ro.build.version.sdk`
-ABI=`getprop ro.product.cpu.abi | $BUSYBOX cut -c-3`
-ABI2=`getprop ro.product.cpu.abi2 | $BUSYBOX cut -c-3`
+ABI=`getprop ro.product.cpu.abi | cut -c-3`
+ABI2=`getprop ro.product.cpu.abi2 | cut -c-3`
 ABILONG=`getprop ro.product.cpu.abi`
 
 ARCH=$ABILONG
@@ -74,7 +70,7 @@ if [[ -n $EXTRACT_RAMDISK ]]; then
     echo "[*] Extracting ramdisk .."
     rm -f ${RAMDISK}.gz
     dd if=$TMP_DIR/boot.img of=$RAMDISK bs=2048 skip=1
-    $BUSYBOX gzip $RAMDISK
+    gzip $RAMDISK
     mv ${RAMDISK}.gz $RAMDISK
   else
     echo "[!] boot.img not found. "
@@ -84,27 +80,9 @@ if [[ -n $EXTRACT_RAMDISK ]]; then
   exit 0
 fi # EXTRACT_RAMDISK
 
-# fetch latest magisk
-if [[ -n $USES_CANARY ]]; then
-  echo "[*] Fetching canary version of Magisk .."
-  rm -f magisk.zip
-  while [[ $STATUS != 0 ]]
-  do
-    $BUSYBOX wget -c https://raw.githubusercontent.com/topjohnwu/magisk-files/canary/app-debug.apk -O magisk.zip
-    STATUS=$?
-    if [[ $STATUS == 1 && -f magisk.zip ]] ; then
-      F_SIZE=$(stat -c %s magisk.zip)
-      BLOCK=$((F_SIZE/4096-2))
-      echo "[*] Failed to get full magisk.zip, retry .. (" $BLOCK ")"
-      dd if=magisk.zip of=magisk.zip.new bs=4096 count=$BLOCK > /dev/null 2>&1
-      mv -f magisk.zip.new magisk.zip
-    fi
-  done
-fi
-
 # extract files
 echo "[*] Unzipping Magisk .."
-$BUSYBOX unzip magisk.zip -od $TMP_DIR > /dev/null
+unzip magisk.zip -od $TMP_DIR > /dev/null
 
 COMMON=/common
 if [[ -f $TMP_DIR/classes.dex ]]; then
@@ -124,21 +102,10 @@ if [[ -f $TMP_DIR/classes.dex ]]; then
   cd - > /dev/null
 fi
 
-# Use x86_64 busybox instead of built-in one.
-# If you don't wanna take it, comment out those lines
-if [[ $IS64BIT == true ]]; then
-  rm -f ${TMP_DIR}${BINDIR}/$ARCH/busybox
-  if [[ $ARCH == "x86" ]] || [[ $ARCH == "x86_64" ]]; then
-    $BUSYBOX wget -c https://raw.githubusercontent.com/Magisk-Modules-Repo/busybox-ndk/master/busybox-x86_64-selinux -O ${TMP_DIR}${BINDIR}/$ARCH/busybox
-  else
-    $BUSYBOX wget -c https://raw.githubusercontent.com/Magisk-Modules-Repo/busybox-ndk/master/busybox-arm64-selinux -O ${TMP_DIR}${BINDIR}/$ARCH/busybox
-  fi
-fi
 # END
 cp ${TMP_DIR}${BINDIR}/$ARCH/* $MAGISK_DIR
 mv ${TMP_DIR}${COMMON}/* $MAGISK_DIR
 [ -d $TMP_DIR/chromeos ] && mv $TMP_DIR/chromeos $MAGISK_DIR
-[ -f $MAGISK_DIR/busybox ] && cp $MAGISK_DIR/busybox $BUSYBOX || cp $BUSYBOX $MAGISK_DIR
 
 chmod 755 $MAGISK_DIR/*
 if [[ -n $USES_ZIP_IN_APK ]]; then
@@ -149,7 +116,7 @@ else
 fi
 
 # extract and check ramdisk
-$BUSYBOX gzip -fd ${RAMDISK}.gz
+gzip -fd ${RAMDISK}.gz
 if [[ $? -ne 0 ]]; then
   echo "[-] Failed to unzip ramdisk, just use it .."
   mv ${RAMDISK}.gz ${RAMDISK}
@@ -159,7 +126,7 @@ fi
 if [[ $API -ge 30 ]]; then
   echo "[-] API level greater then 30"
   echo "[*] Check if we need to repack ramdisk before patching .."
-  COUNT=`$BUSYBOX strings -t d $RAMDISK | $BUSYBOX grep TRAILER\!\!\! | $BUSYBOX wc -l`
+  COUNT=`strings -t d $RAMDISK | grep TRAILER\!\!\! | wc -l`
   if [ $COUNT -gt 1 ]; then
     echo "[-] Multiple cpio archives detected"
     REPACK_RAMDISK=1
@@ -173,7 +140,7 @@ if [[ -n $REPACK_RAMDISK ]]; then
   IBS=1
   OBS=4096
 
-  RAMDISKS=`$BUSYBOX strings -t d $RAMDISK | $BUSYBOX grep TRAILER\!\!\!`
+  RAMDISKS=`strings -t d $RAMDISK | grep TRAILER\!\!\!`
   for OFFSET in $RAMDISKS
   do
     # calculate offset to next archive
@@ -184,7 +151,7 @@ if [[ -n $REPACK_RAMDISK ]]; then
 
       # find first occurance of string in image, that will be start of cpio archive
       dd if=$RAMDISK skip=$START count=$OBS ibs=$IBS obs=$OBS of=$TMP_DIR/temp.img > /dev/null 2>&1
-      HEAD=(`$BUSYBOX strings -t d $TMP_DIR/temp.img | $BUSYBOX head -1`)
+      HEAD=(`strings -t d $TMP_DIR/temp.img | head -1`)
 
       # wola
       [[ -n $TRY_LZ4 ]] && MAGIC=9 || MAGIC=$((HEAD[0]))
@@ -205,14 +172,14 @@ if [[ -n $REPACK_RAMDISK ]]; then
           mv $TMP_DIR/temp_decompress.img $TMP_DIR/temp.img
         fi
       fi
-      cat $TMP_DIR/temp.img | $BASE_DIR/busybox cpio -i > /dev/null 2>&1
+      cat $TMP_DIR/temp.img | cpio -i > /dev/null 2>&1
     cd - > /dev/null
     LAST_INDEX=$OFFSET
   done
 
   echo "[*] Repacking ramdisk .."
   cd $TMP_DIR/ramdisk > /dev/null
-    $BUSYBOX find . | $BUSYBOX cpio -H newc -o > $RAMDISK
+    find . | cpio -H newc -o > $RAMDISK
   cd - > /dev/null
 
   rm $TMP_DIR/temp.img
@@ -307,7 +274,7 @@ else
   echo "[*] Done patching, compressing ramdisk .."
 fi # USES_MANAGER
 
-$BUSYBOX gzip $RAMDISK
+gzip $RAMDISK
 mv ${RAMDISK}.gz $RAMDISK
 
 # install apk
@@ -399,10 +366,10 @@ fi # USES_MANAGER
 
 # patch initrd
 if [ -f ${INITRD}.gz ]; then
-  $BUSYBOX gzip -fd ${INITRD}.gz
+  gzip -fd ${INITRD}.gz
   mkdir i; cd i; cat $INITRD | $BUSYBOX cpio -i
-  $BUSYBOX patch -p1 < ../initrd.patch
-  $BUSYBOX find . | $BUSYBOX cpio -H newc -o | $BUSYBOX gzip > $INITRD
+  patch -p1 < ../initrd.patch
+  find . | $BUSYBOX cpio -H newc -o | $BUSYBOX gzip > $INITRD
   cd ..; rm -rf i
 fi
 
